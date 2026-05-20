@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slo-mo Analysis Player Pro</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #002794;
+            --success: #16a34a;
+            --success-dark: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+            --bg: #f8fafc;
+        }
+        body { font-family: sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
+        .container { width: 100%; max-width: 800px; background: white; padding: 12px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box; }
+        
+        h2 { margin: 0 0 2px 0; font-size: 1.2rem; text-align: center; }
+        .note { font-size: 0.8rem; color: #64748b; margin: 0 0 8px 0; text-align: center; }
+        
+        video { width: 100%; border-radius: 8px; background: #000; margin-bottom: 8px; }
+
+        .controls-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; background: #fffbeb; padding: 10px; border-radius: 8px; border: 1px solid #fef3c7; }
+        .control-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        
+        label { font-size: 0.85rem; font-weight: bold; color: #475569; }
+        select { font-size: 0.95rem; padding: 6px; border-radius: 5px; flex-grow: 1; border: 1px solid #cbd5e1; }
+        input[type="file"] { font-size: 0.85rem; flex-grow: 1; width: 50%; }
+
+        .timer-display { font-size: 3.2rem; font-weight: bold; font-family: monospace; text-align: center; margin: 8px 0; color: #334155; border-bottom: 2px solid #e2e8f0; }
+        
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        button { padding: 40px 5px; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        #startBtn { background: var(--primary); }
+        #lapBtn { background: var(--success); }
+        #resetBtn { background: #ff7675; }
+
+        /* テーブル設定 */
+        table { width: 100%; margin-left: auto; margin-right: 0; border-collapse: collapse; table-layout: fixed; }
+        th { padding: 8px 4px; border-bottom: 1px solid #e2e8f0; font-size: 0.8rem; background: #f1f5f9; color: #64748b; }
+        td { padding: 10px 4px; border-bottom: 1px solid #e2e8f0; font-size: 1.05rem; font-weight: bold; }
+        
+        /* 列幅と配置の調整 */
+        th:nth-child(1), td:nth-child(1) { width: 12%; text-align: left; }
+        th:nth-child(2), td:nth-child(2) { width: 28%; text-align: left; }   /* 累計：左寄せ */
+        th:nth-child(3), td:nth-child(3) { width: 25%; text-align: center; } /* 区間：中央 */
+        th:nth-child(4), td:nth-child(4) { width: 35%; text-align: right; padding-right: 8px; } /* 回転数：右寄せ */
+
+        .rpm-value { font-size: 1.2rem; font-weight: bold; color: var(--primary); }
+        .avg-value { font-size: 0.75rem; color: #64748b; font-weight: normal; display: inline-block; margin-left: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⏱️ 時間計測アプリ</h2>
+    <p class="note">※動画未選択時はストップウォッチとして使用可能</p>
+    
+    <video id="videoPlayer" controls></video>
+    
+    <div class="controls-group">
+        <div class="control-row">
+            <input type="file" id="fileInput" accept="video/*">
+            <button id="clearVideo" style="background:#64748b; padding:6px 10px; font-size:0.85rem;">動画解除</button>
+        </div>
+        <div class="control-row">
+            <div style="flex:1; display: flex; align-items: center; gap: 4px;">
+                <label>再生</label>
+                <select id="playbackRate">
+                    <option value="1">1.0倍</option>
+                    <option value="0.5">0.5倍</option>
+                    <option value="0.25">0.25倍</option>
+                    <option value="0.125">0.125倍</option>
+                </select>
+            </div>
+            <div style="flex:1; display: flex; align-items: center; gap: 4px;">
+                <label>⏱️</label>
+                <select id="timerRate">
+                    <option value="1">1.0倍</option>
+                    <option value="0.5">1/2スロー撮影動画用</option>
+                    <option value="0.25">1/4スロー撮影動画用</option>
+                    <option value="0.125">1/8スロー撮影動画用</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="timer-display" id="display">00:00:00.000</div>
+
+    <div class="btn-group">
+        <button id="startBtn">スタート</button>
+        <button id="lapBtn">ラップ記録</button>
+        <button id="resetBtn">フルリセット</button>
+    </div>
+
+    <table id="lapTable">
+        <thead>
+            <tr>
+                <th>No.</th>
+                <th>累計</th>
+                <th>ラップタイム</th>
+                <th>回転数(rpm)</th>
+            </tr>
+        </thead>
+        <tbody id="lapList"></tbody>
+    </table>
+</div>
+
+<script>
+    let startTime, elapsedTime = 0, timerInterval;
+    let laps = [];
+    const video = document.getElementById('videoPlayer');
+    const display = document.getElementById('display');
+    const playbackRateSelect = document.getElementById('playbackRate');
+    const timerRateSelect = document.getElementById('timerRate');
+    const lapBtn = document.getElementById('lapBtn');
+    const startBtn = document.getElementById('startBtn');
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+            if (file) {
+                fullReset();
+                video.src = URL.createObjectURL(file);
+                video.load();
+            }
+    });
+
+    document.getElementById('clearVideo').onclick = () => { 
+        if (video.src !== "" && video.src !== window.location.href) {
+            const result = confirm("読み込んでいる動画を解除し、計測データもリセットしてよろしいですか？");    
+            if (!result) return;
+            fullReset(); 
+            video.src = ""; 
+            video.removeAttribute('src');
+            document.getElementById('fileInput').value = ""; 
+            display.textContent = '00:00:00.000';
+        }
+    };
+
+    playbackRateSelect.onchange = () => { 
+        video.playbackRate = playbackRateSelect.value;
+    };
+
+    function formatTime(ms) {
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        const mil = Math.floor(ms % 1000);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${mil.toString().padStart(3, '0')}`;
+    }
+
+    function update() {
+        const now = Date.now();
+        const combinedRate = parseFloat(playbackRateSelect.value) * parseFloat(timerRateSelect.value);
+        const diff = (now - startTime) * combinedRate;
+        const total = elapsedTime + diff;
+        display.textContent = formatTime(total);
+        return total;
+    }
+
+    startBtn.onclick = function() {
+        if (!timerInterval) {
+            startTime = Date.now();
+            timerInterval = setInterval(update, 10);
+            if(video.src) video.play();
+            this.textContent = 'ストップ';
+            this.style.background = 'var(--primary-dark)';
+            lapBtn.textContent = 'ラップ記録';
+            lapBtn.style.background = 'var(--success)';
+        } else {
+            elapsedTime = update();
+            clearInterval(timerInterval);
+            timerInterval = null;
+            video.pause();
+            this.textContent = 'スタート';
+            this.style.background = 'var(--primary)';
+            lapBtn.textContent = '結果リセット';
+            lapBtn.style.background = 'var(--success-dark)';
+        }
+    };
+
+    lapBtn.onclick = function() {
+        if (timerInterval) {
+            const currentTime = update();
+            let lapData = { 
+                rawTotal: currentTime, // 生のタイマー時間
+                videoPos: video.currentTime * 1000 // ミリ秒換算の動画位置
+            };
+
+            if (laps.length === 0) {
+                // No.0 の場合
+                lapData.split = 0;
+                lapData.rpm = 0;
+            } else {
+                // No.1 以降の場合
+                const lastTime = laps[laps.length - 1].rawTotal;
+                const split = currentTime - lastTime;
+                const splitSeconds = split / 1000;
+                lapData.split = split;
+                lapData.rpm = (splitSeconds > 0) ? (60 / splitSeconds) : 0;
+            }
+            
+            laps.push(lapData);
+            renderLaps();
+        } else {
+            laps = [];
+            elapsedTime = 0;
+            display.textContent = '00:00:00.000';
+            renderLaps();
+        }
+    };
+
+    function renderLaps() {
+        const list = document.getElementById('lapList');
+        list.innerHTML = '';
+        
+        const validRpmLaps = laps.filter((l, idx) => idx > 0);
+        const avgRpm = validRpmLaps.length > 0 
+            ? (validRpmLaps.reduce((sum, l) => sum + l.rpm, 0) / validRpmLaps.length).toFixed(1)
+            : "0.0";
+
+        const baseTimerTime = laps.length > 0 ? laps[0].rawTotal : 0;
+
+        [...laps].reverse().forEach((lap, index) => {
+            const actualIndex = laps.length - 1 - index;
+            const row = list.insertRow();
+            row.insertCell(0).textContent = actualIndex;
+            
+            const totalCell = row.insertCell(1);
+            const splitCell = row.insertCell(2);
+            const rpmCell = row.insertCell(3);
+
+            if (actualIndex === 0) {
+                if (lap.videoPos == 0) {
+                    // No.0: ストップウォッチのときスタート位置を0.001秒単位で表示し、グレーにする
+                    totalCell.innerHTML = `<span style="color: #759aff; font-size: 0.7rem;">${(lap.rawTotal / 1000).toFixed(3)}記録開始</span>`;
+                    splitCell.textContent = '---';
+                    rpmCell.textContent = '---';
+                } else {
+                    // No.0: 動画再生時スタート位置を0.1秒単位で表示し、グレーにする
+                    totalCell.innerHTML = `<span style="color: #759aff; font-size: 0.7rem;">${(lap.videoPos / 1000).toFixed(1)}記録開始</span>`;
+                    splitCell.textContent = '---';
+                    rpmCell.textContent = '---';
+                }
+            } else {
+                // No.1以降: 通常通り表示
+                const relativeTotal = lap.rawTotal - baseTimerTime;
+                totalCell.textContent = formatTime(relativeTotal).split(':').slice(1).join(':'); 
+                
+                splitCell.textContent = `+${(lap.split/1000).toFixed(3)}s`;
+                
+                let cellHtml = `<span class="rpm-value">${lap.rpm.toFixed(1)}</span>`;
+                if (index === 0) {
+                    cellHtml += `<span class="avg-value">(平:${avgRpm})</span>`;
+                }
+                rpmCell.innerHTML = cellHtml;
+            }
+        });
+    }
+
+    function fullReset() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        elapsedTime = 0;
+        laps = [];
+        display.textContent = '00:00:00.000';
+        document.getElementById('lapList').innerHTML = '';
+        startBtn.textContent = 'スタート';
+        startBtn.style.background = 'var(--primary)';
+        lapBtn.textContent = 'ラップ記録';
+        lapBtn.style.background = 'var(--success)';
+        if (video.src) {
+            video.pause();
+            video.currentTime = 0;
+        }
+    }
+
+    document.getElementById('resetBtn').onclick = fullReset;
+</script>
+
+</body>
+</html>
