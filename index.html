@@ -357,17 +357,14 @@
         const helpBtn = document.getElementById('help-btn');
         const helpModal = document.getElementById('help-modal');
         const closeBtn = document.getElementById('close-btn');
-
         // 「使い方」ボタンを押したらモーダルを表示
         helpBtn.addEventListener('click', () => {
             helpModal.style.display = 'block';
         });
-
         // 「×」ボタンを押したらモーダルを非表示
         closeBtn.addEventListener('click', () => {
             helpModal.style.display = 'none';
         });
-
         // モーダルの外側（暗い背景部分）を押しても閉じるようにする
         window.addEventListener('click', (event) => {
             if (event.target === helpModal) {
@@ -528,6 +525,30 @@
             });
         }
 
+
+        // 動画が終了したらタイマーをストップさせる  ここから
+        // 1. 動画要素と、タイマーを停止させる処理を取得・定義する
+        const videoElement = document.querySelector('video'); // または document.getElementById('動画のID')
+        // 2. 動画が終了したときのイベントを設定
+        videoElement.addEventListener('ended', () => {
+            // ここにタイマーをストップする処理を記述します
+            // 例：
+            clearInterval(timerInterval); // タイマーのループを止める
+            // ボタンの表示を「スタート」に戻す処理などがあればここに書く
+            // startButton.textContent = 'スタート';
+            elapsedTime = update();
+            clearInterval(timerInterval);
+            timerInterval = null;
+            video.pause();
+            startBtn.textContent = 'スタート';
+            startBtn.style.background = 'var(--primary)';
+            lapBtn.textContent = '結果リセット';
+            lapBtn.style.background = 'var(--success-dark)';
+            //console.log('動画が終了したため、タイマーを停止しました。');
+        });
+        // 動画が終了したらタイマーをストップさせる  ここまで
+
+        
         function fullReset() {
             clearInterval(timerInterval);
             timerInterval = null;
