@@ -26,6 +26,11 @@
             margin: 0;
         }
 
+        /* ★【追加】モーダルが開いているときに背景スクロールを禁止する */
+        body.modal-open {
+            overflow: hidden;
+        }
+
         .container {
             width: 100%;
             max-width: 800px;
@@ -235,6 +240,8 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.6);
             /* 背景を少し暗く */
+            /* ★【修正】スクロール禁止のため、背景自体の溢れを隠し、縦方向のスクロールを有効にする */
+            overflow-y: auto; 
         }
 
         /* モーダルコンテンツ（画像と閉じるボタンを囲う枠） */
@@ -357,18 +364,24 @@
         const helpBtn = document.getElementById('help-btn');
         const helpModal = document.getElementById('help-modal');
         const closeBtn = document.getElementById('close-btn');
-        // 「使い方」ボタンを押したらモーダルを表示
+
+        // 「使い方」ボタンを押したらモーダルを表示 ＆ スクロール禁止
         helpBtn.addEventListener('click', () => {
             helpModal.style.display = 'block';
+            document.body.classList.add('modal-open'); // ★背景固定
         });
-        // 「×」ボタンを押したらモーダルを非表示
+
+        // 「×」ボタンを押したらモーダルを非表示 ＆ スクロール再開
         closeBtn.addEventListener('click', () => {
             helpModal.style.display = 'none';
+            document.body.classList.remove('modal-open'); // ★背景固定解除
         });
-        // モーダルの外側（暗い背景部分）を押しても閉じるようにする
+
+        // モーダルの外側を押しても閉じる ＆ スクロール再開
         window.addEventListener('click', (event) => {
             if (event.target === helpModal) {
                 helpModal.style.display = 'none';
+                document.body.classList.remove('modal-open'); // ★背景固定解除
             }
         });
         // 「使い方」ボタンを右上に追加 ここまで
