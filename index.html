@@ -399,6 +399,8 @@
         document.getElementById('fileInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
+                document.getElementById('playbackRate').value = "1";
+                document.getElementById('timerRate').value = "1";
                 fullReset();
                 video.src = URL.createObjectURL(file);
                 video.load();
@@ -414,6 +416,8 @@
                 video.removeAttribute('src');
                 document.getElementById('fileInput').value = "";
                 display.textContent = '00:00:00.000';
+                document.getElementById('playbackRate').value = "1";
+                document.getElementById('timerRate').value = "1";
             }
         };
 
